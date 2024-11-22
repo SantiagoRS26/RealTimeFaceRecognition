@@ -1,13 +1,14 @@
-﻿using Emgu.CV;
+﻿using BLL.Interfaces;
+using Emgu.CV;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace RealTimeFaceRecognition.Capture
+namespace BLL.Services
 {
-    public class VideoCaptureService : IDisposable
+    public class VideoCaptureService : IVideoCaptureService
     {
         private VideoCapture _capture;
         private int _cameraIndex;
@@ -59,5 +60,27 @@ namespace RealTimeFaceRecognition.Capture
             Stop();
             _capture.Dispose();
         }
+
+        public double GetFramesPerSecond()
+        {
+            // Obtener el FPS de la captura
+            double fps = _capture.Get(Emgu.CV.CvEnum.CapProp.Fps);
+            if (fps == 0 || double.IsNaN(fps))
+            {
+                fps = 30; // Valor predeterminado si no se puede obtener el FPS
+            }
+            return fps;
+        }
+
+        public int GetFrameWidth()
+        {
+            return (int)_capture.Get(Emgu.CV.CvEnum.CapProp.FrameWidth);
+        }
+
+        public int GetFrameHeight()
+        {
+            return (int)_capture.Get(Emgu.CV.CvEnum.CapProp.FrameHeight);
+        }
+
     }
 }

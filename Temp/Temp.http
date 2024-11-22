@@ -1,0 +1,6 @@
+@Temp_HostAddress = http://localhost:5211
+
+GET {{Temp_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

@@ -1,24 +1,25 @@
 ﻿using Emgu.CV.Dnn;
-using Emgu.CV.Structure;
 using Emgu.CV;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using BLL.Interfaces;
+using DAL.Interfaces;
+using Emgu.CV.Structure;
 
-namespace RealTimeFaceRecognition.Detection
+namespace BLL.Services
 {
-    public class FaceDetectionDNNService : IDisposable
+    public class FaceDetectionDNNService : IFaceDetectionService
     {
         private readonly Net _faceNet;
         private readonly float _confThreshold;
 
-        public FaceDetectionDNNService(string modelConfiguration, string modelWeights, float confThreshold = 0.5f)
+        public FaceDetectionDNNService(IFaceModelLoader modelLoader, string modelConfiguration, string modelWeights, float confThreshold = 0.5f)
         {
-            // Cargar la red preentrenada
-            _faceNet = DnnInvoke.ReadNetFromCaffe(modelConfiguration, modelWeights);
+            if (modelLoader == null)
+                throw new ArgumentNullException(nameof(modelLoader));
+
+            _faceNet = modelLoader.LoadModel(modelConfiguration, modelWeights);
             _confThreshold = confThreshold;
         }
 
@@ -33,13 +34,11 @@ namespace RealTimeFaceRecognition.Detection
             // Ejecutar la detección
             Mat detections = _faceNet.Forward();
 
-            // Parsear las detecciones
-            var faces = new System.Collections.Generic.List<Rectangle>();
+            var faces = new List<Rectangle>();
 
             for (int i = 0; i < detections.SizeOfDimension[2]; i++)
             {
-                float confidence = detections.GetData().GetValue(0, 0, i, 2) != null ? (float)detections.GetData().GetValue(0, 0, i, 2) : 0f;
-
+                float confidence = (float)detections.GetData().GetValue(0, 0, i, 2);
                 if (confidence > _confThreshold)
                 {
                     int x1 = (int)((float)detections.GetData().GetValue(0, 0, i, 3) * frame.Cols);
@@ -47,14 +46,12 @@ namespace RealTimeFaceRecognition.Detection
                     int x2 = (int)((float)detections.GetData().GetValue(0, 0, i, 5) * frame.Cols);
                     int y2 = (int)((float)detections.GetData().GetValue(0, 0, i, 6) * frame.Rows);
 
-                    // Asegurarse de que las coordenadas estén dentro de la imagen
                     x1 = Math.Max(0, x1);
                     y1 = Math.Max(0, y1);
                     x2 = Math.Min(frame.Cols - 1, x2);
                     y2 = Math.Min(frame.Rows - 1, y2);
 
-                    Rectangle faceRect = new Rectangle(x1, y1, x2 - x1, y2 - y1);
-                    faces.Add(faceRect);
+                    faces.Add(new Rectangle(x1, y1, x2 - x1, y2 - y1));
                 }
             }
 

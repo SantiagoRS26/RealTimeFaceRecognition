@@ -1,8 +1,9 @@
-﻿using Emgu.CV;
+﻿using BLL.Interfaces;
+using BLL.Services;
+using DAL.Interfaces;
+using DAL.Servicios;
+using Emgu.CV;
 using Emgu.CV.Structure;
-using RealTimeFaceRecognition.Capture;
-using RealTimeFaceRecognition.Detection;
-using RealTimeFaceRecognition.Recognition;
 using System;
 using System.Drawing;
 
@@ -10,10 +11,7 @@ namespace RealTimeFaceRecognition
 {
     internal class Program
     {
-        static FaceDetectionDNNService _faceDetectionDNNService;
-        static FaceRecognitionService _faceRecognitionService;
-
-        static int _totalPersonCount = 0;
+        private static IFaceDetectionService _faceDetectionService;
 
         static void Main(string[] args)
         {
@@ -21,23 +19,10 @@ namespace RealTimeFaceRecognition
             string modelConfiguration = "deploy.prototxt";
             string modelWeights = "res10_300x300_ssd_iter_140000.caffemodel";
 
-            // Inicializar el servicio de detección de rostros basado en DNN
-            _faceDetectionDNNService = new FaceDetectionDNNService(modelConfiguration, modelWeights, confThreshold: 0.8f);
+            // Configurar los servicios
+            ConfigureServices(modelConfiguration, modelWeights, 0.8f);
 
-            // Inicializar el servicio de reconocimiento facial
-            _faceRecognitionService = new FaceRecognitionService();
-            string knownFacesPath = "C:\\Users\\santi\\source\\repos\\RealTimeFaceRecognition\\RealTimeFaceRecognition\\KnownFaces\\"; // Asegúrate de que esta carpeta exista y esté correctamente estructurada
-            try
-            {
-                _faceRecognitionService.TrainRecognizer(knownFacesPath);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error al entrenar el reconocedor: {ex.Message}");
-                return; // Salir si no se puede entrenar
-            }
-
-            using (VideoCaptureService captureService = new VideoCaptureService(0))
+            using (IVideoCaptureService captureService = new VideoCaptureService(0))
             {
                 captureService.FrameCaptured += OnFrameCaptured;
                 captureService.Start();
@@ -51,49 +36,30 @@ namespace RealTimeFaceRecognition
                 captureService.Stop();
             }
 
-            _faceDetectionDNNService.Dispose();
-            _faceRecognitionService.Dispose();
+            _faceDetectionService.Dispose();
+        }
+
+        private static void ConfigureServices(string modelConfiguration, string modelWeights, float confThreshold)
+        {
+            // Crear el cargador de modelo (DAL)
+            IFaceModelLoader modelLoader = new FaceModelLoader();
+
+            // Crear el servicio de detección (BLL) utilizando el modelo cargador
+            _faceDetectionService = new FaceDetectionDNNService(modelLoader, modelConfiguration, modelWeights, confThreshold);
         }
 
         private static void OnFrameCaptured(object sender, Mat frame)
         {
             // Detectar rostros en el frame usando DNN
-            Rectangle[] faces = _faceDetectionDNNService.DetectFaces(frame);
+            Rectangle[] faces = _faceDetectionService.DetectFaces(frame);
 
             // Actualizar el contador de personas
             int personCount = faces.Length;
 
-            // Dibujar rectángulos alrededor de los rostros detectados y reconocer
+            // Dibujar rectángulos alrededor de los rostros detectados
             foreach (var face in faces)
             {
-                // Extraer la región facial
-                var faceRegion = new Rectangle(face.X, face.Y, face.Width, face.Height);
-                Mat faceMat = new Mat(frame, faceRegion);
-
-                // Preprocesar la imagen de la cara para el reconocimiento
-                Image<Gray, byte> grayFace = faceMat.ToImage<Gray, byte>();
-                grayFace = grayFace.Resize(200, 200, Emgu.CV.CvEnum.Inter.Linear); // Asegúrate de que el tamaño coincida con el entrenamiento
-
-                // Reconocer la cara
-                string label = "Desconocido";
-                int predictedLabel;
-                double confidence = 0.0;
-                try
-                {
-                    label = _faceRecognitionService.RecognizeFace(grayFace, out predictedLabel, out confidence);
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error al reconocer la cara: {ex.Message}");
-                }
-
-                // Dibujar el rectángulo alrededor de la cara
-                CvInvoke.Rectangle(frame, faceRegion, new MCvScalar(0, 255, 0), 2);
-
-                // Escribir el nombre de la persona
-                string text = $"{label} ({confidence:F2})";
-                Point textPoint = new Point(faceRegion.X, faceRegion.Y - 10 > 10 ? faceRegion.Y - 10 : faceRegion.Y + faceRegion.Height + 20);
-                CvInvoke.PutText(frame, text, textPoint, Emgu.CV.CvEnum.FontFace.HersheySimplex, 0.8, new MCvScalar(0, 255, 0), 2);
+                CvInvoke.Rectangle(frame, face, new MCvScalar(0, 255, 0), 2);
             }
 
             // Mostrar el conteo en la imagen

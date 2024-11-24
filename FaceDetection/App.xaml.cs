@@ -25,33 +25,30 @@ namespace FaceDetection
             ConfigureServices(services);
             ServiceProvider = services.BuildServiceProvider();
 
-            // Crear un scope para resolver servicios Scoped
-            using (var scope = ServiceProvider.CreateScope())
-            {
-                var mainWindow = scope.ServiceProvider.GetRequiredService<MainWindow>();
-                mainWindow.Show();
-            }
+            var mainWindow = ServiceProvider.GetRequiredService<MainWindow>();
+            mainWindow.Show();
         }
 
         private void ConfigureServices(ServiceCollection services)
         {
-            services.AddDbContext<ApplicationDbContext>(options =>
+            // Configure DbContext as Transient
+            services.AddTransient<ApplicationDbContext>(provider =>
             {
+                var optionsBuilder = new DbContextOptionsBuilder<ApplicationDbContext>();
                 var connectionString = ConfigurationManager.ConnectionStrings["DefaultConnection"].ConnectionString;
-                options.UseNpgsql(connectionString);
+                optionsBuilder.UseNpgsql(connectionString);
+                return new ApplicationDbContext(optionsBuilder.Options);
             });
 
-            // Repositorios Genéricos
-            services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
+            // Register repositories and UnitOfWork as Transient
+            services.AddTransient(typeof(IGenericRepository<>), typeof(GenericRepository<>));
+            services.AddTransient<IUnitOfWork, UnitOfWork>();
 
-            // Servicios BLL
-            services.AddScoped<IVideoService, VideoService>();
-            services.AddScoped<IDetectionService, DetectionService>();
-            services.AddScoped<IIntervalService, IntervalService>();
-            services.AddScoped<ILogService, LogService>();
-            // Otros servicios BLL si existen
+            // Register BLL services as Transient
+            services.AddTransient<IVideoService, VideoService>();
+            services.AddTransient<ILogService, LogService>();
 
-            // Servicios para Captura de Video y Detección
+            // Register services for video capture and detection
             services.AddSingleton<IVideoCaptureService, VideoCaptureService>();
             services.AddSingleton<IFaceModelLoader, FaceModelLoader>();
             services.AddSingleton<IFaceDetectionService>(provider =>
@@ -59,14 +56,14 @@ namespace FaceDetection
                 var modelLoader = provider.GetService<IFaceModelLoader>();
                 string modelConfiguration = "Models/deploy.prototxt";
                 string modelWeights = "Models/res10_300x300_ssd_iter_140000.caffemodel";
-                float confThreshold = 0.5f;
+                float confThreshold = 0.8f;
 
                 return new FaceDetectionDNNService(modelLoader, modelConfiguration, modelWeights, confThreshold);
             });
 
-            // ViewModels y Windows
-            services.AddScoped<MainViewModel>();
-            services.AddScoped<MainWindow>();
+            // Register ViewModels and Windows
+            services.AddSingleton<MainViewModel>();
+            services.AddSingleton<MainWindow>();
         }
     }
 }

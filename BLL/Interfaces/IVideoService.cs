@@ -11,7 +11,7 @@ namespace BLL.Interfaces
     {
         Task<IEnumerable<Video>> GetAllVideosAsync();
         Task<Video> GetVideoByIdAsync(int videoId);
-        Task AddVideoAsync(Video video);
+        Task<Video> AddVideoAsync(Video video);
         Task UpdateVideoAsync(Video video);
         Task DeleteVideoAsync(int videoId);
     }

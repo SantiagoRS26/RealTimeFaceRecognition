@@ -9,12 +9,13 @@ namespace Models.Domain
     public class Video
     {
         public int VideoId { get; set; }
-        public string FilePath { get; set; }
-        public DateTime StartTime { get; set; }
-        public DateTime EndTime { get; set; }
-        public int DurationInSeconds { get; set; }
+        public string FilePath { get; set; } // Ruta del archivo del video
+        public DateTime StartTime { get; set; } // Inicio del video
+        public DateTime EndTime { get; set; } // Fin del video
+        public int MaxPersons { get; set; } // Máximo de personas detectadas
+        public float AveragePersons { get; set; } // Promedio de personas detectadas
+        public int DurationInSeconds { get; set; } // Duración en segundos del video
 
-        public ICollection<Interval> Intervals { get; set; }
-        public ICollection<Log> Logs { get; set; }
+        public ICollection<Log> Logs { get; set; } // Relación con Logs
     }
 }

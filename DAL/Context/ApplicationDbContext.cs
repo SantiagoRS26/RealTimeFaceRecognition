@@ -18,8 +18,6 @@ namespace DAL.Context
         }
 
         public DbSet<Video> Videos { get; set; }
-        public DbSet<Interval> Intervals { get; set; }
-        public DbSet<Detection> Detections { get; set; }
         public DbSet<Log> Logs { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)

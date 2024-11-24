@@ -12,43 +12,66 @@ namespace BLL.Services
 {
     public class VideoService : IVideoService
     {
-        private readonly IGenericRepository<Video> _videoRepository;
+        private readonly IUnitOfWork _unitOfWork;
 
-        public VideoService(IGenericRepository<Video> videoRepository)
+        public VideoService(IUnitOfWork unitOfWork)
         {
-            _videoRepository = videoRepository;
+            _unitOfWork = unitOfWork;
         }
 
         public async Task<IEnumerable<Video>> GetAllVideosAsync()
         {
-            return await _videoRepository.GetAllAsync();
+            return await _unitOfWork.Videos.GetAllAsync();
         }
 
         public async Task<Video> GetVideoByIdAsync(int videoId)
         {
-            return await _videoRepository.GetByIdAsync(videoId);
+            return await _unitOfWork.Videos.GetByIdAsync(videoId);
         }
 
-        public async Task AddVideoAsync(Video video)
+        public async Task<Video> AddVideoAsync(Video video)
         {
-            await _videoRepository.AddAsync(video);
-            await _videoRepository.SaveChangesAsync();
+            if (video == null)
+                throw new ArgumentNullException(nameof(video));
+
+            try
+            {
+                await _unitOfWork.Videos.AddAsync(video);
+                await _unitOfWork.CommitAsync();
+
+                if (video.VideoId == 0)
+                {
+                    throw new InvalidOperationException("El VideoId no se generó correctamente al guardar el Video.");
+                }
+
+                return video;
+            }
+            catch (Exception ex)
+            {
+                // Registrar o lanzar la excepción para depurar
+                Console.WriteLine($"Error en AddVideoAsync: {ex.Message}");
+                throw;
+            }
         }
+
 
         public async Task UpdateVideoAsync(Video video)
         {
-            _videoRepository.Update(video);
-            await _videoRepository.SaveChangesAsync();
+            if (video == null)
+                throw new ArgumentNullException(nameof(video));
+
+            _unitOfWork.Videos.Update(video);
+            await _unitOfWork.CommitAsync();
         }
 
         public async Task DeleteVideoAsync(int videoId)
         {
-            var video = await _videoRepository.GetByIdAsync(videoId);
-            if (video != null)
-            {
-                _videoRepository.Remove(video);
-                await _videoRepository.SaveChangesAsync();
-            }
+            var video = await _unitOfWork.Videos.GetByIdAsync(videoId);
+            if (video == null)
+                throw new KeyNotFoundException($"Video with ID {videoId} not found.");
+
+            _unitOfWork.Videos.Remove(video);
+            await _unitOfWork.CommitAsync();
         }
     }
 }

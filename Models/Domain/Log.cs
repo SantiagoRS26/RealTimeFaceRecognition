@@ -9,13 +9,10 @@ namespace Models.Domain
     public class Log
     {
         public int LogId { get; set; }
-        public DateTime LogTimestamp { get; set; }
-        public string Level { get; set; }
-        public string Event { get; set; }
-        public int? VideoId { get; set; }
-        public int? IntervalId { get; set; }
+        public DateTime Timestamp { get; set; } // Fecha y hora del evento
+        public string Event { get; set; } // Descripción del evento (ej. "Persona detectada", "Inicio de grabación")
+        public int? VideoId { get; set; } // Relación con Video (opcional)
 
-        public Video Video { get; set; }
-        public Interval Interval { get; set; }
+        public Video Video { get; set; } // Relación con Video
     }
 }

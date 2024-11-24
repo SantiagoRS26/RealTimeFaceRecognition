@@ -10,11 +10,8 @@ namespace BLL.Interfaces
     public interface IVideoCaptureService : IDisposable
     {
         event EventHandler<Mat> FrameCaptured;
-
         void Start();
-
         void Stop();
-
         double GetFramesPerSecond();
         int GetFrameWidth();
         int GetFrameHeight();

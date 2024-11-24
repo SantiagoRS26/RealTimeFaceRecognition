@@ -12,7 +12,6 @@ namespace BLL.Interfaces
         Task<IEnumerable<Log>> GetAllLogsAsync();
         Task<Log> GetLogByIdAsync(int logId);
         Task<IEnumerable<Log>> GetLogsByVideoIdAsync(int videoId);
-        Task<IEnumerable<Log>> GetLogsByIntervalIdAsync(int intervalId);
         Task AddLogAsync(Log log);
         Task UpdateLogAsync(Log log);
         Task DeleteLogAsync(int logId);

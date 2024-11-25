@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace DAL.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20241123012933_InitMigration")]
-    partial class InitMigration
+    [Migration("20241124223542_NewVideoModel")]
+    partial class NewVideoModel
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -74,6 +74,10 @@ namespace DAL.Migrations
                     b.Property<int>("MaxPersons")
                         .HasColumnType("integer");
 
+                    b.Property<string>("S3Url")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<DateTime>("StartTime")
                         .HasColumnType("timestamp with time zone");
 
@@ -85,10 +89,15 @@ namespace DAL.Migrations
             modelBuilder.Entity("Models.Domain.Log", b =>
                 {
                     b.HasOne("Models.Domain.Video", "Video")
-                        .WithMany()
+                        .WithMany("Logs")
                         .HasForeignKey("VideoId");
 
                     b.Navigation("Video");
+                });
+
+            modelBuilder.Entity("Models.Domain.Video", b =>
+                {
+                    b.Navigation("Logs");
                 });
 #pragma warning restore 612, 618
         }

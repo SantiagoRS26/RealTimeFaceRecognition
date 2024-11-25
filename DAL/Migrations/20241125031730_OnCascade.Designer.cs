@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace DAL.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20241123031556_UpdateModels")]
-    partial class UpdateModels
+    [Migration("20241125031730_OnCascade")]
+    partial class OnCascade
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -74,6 +74,9 @@ namespace DAL.Migrations
                     b.Property<int>("MaxPersons")
                         .HasColumnType("integer");
 
+                    b.Property<string>("S3Url")
+                        .HasColumnType("text");
+
                     b.Property<DateTime>("StartTime")
                         .HasColumnType("timestamp with time zone");
 
@@ -86,7 +89,8 @@ namespace DAL.Migrations
                 {
                     b.HasOne("Models.Domain.Video", "Video")
                         .WithMany("Logs")
-                        .HasForeignKey("VideoId");
+                        .HasForeignKey("VideoId")
+                        .OnDelete(DeleteBehavior.Cascade);
 
                     b.Navigation("Video");
                 });

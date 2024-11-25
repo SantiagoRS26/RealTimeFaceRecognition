@@ -7,7 +7,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace DAL.Migrations
 {
     /// <inheritdoc />
-    public partial class InitMigration : Migration
+    public partial class NewVideoModel : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -23,7 +23,8 @@ namespace DAL.Migrations
                     EndTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     MaxPersons = table.Column<int>(type: "integer", nullable: false),
                     AveragePersons = table.Column<float>(type: "real", nullable: false),
-                    DurationInSeconds = table.Column<int>(type: "integer", nullable: false)
+                    DurationInSeconds = table.Column<int>(type: "integer", nullable: false),
+                    S3Url = table.Column<string>(type: "text", nullable: false)
                 },
                 constraints: table =>
                 {

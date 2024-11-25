@@ -15,6 +15,7 @@ using System.Drawing;
 using Models.Domain;
 using BLL.Services;
 using Microsoft.Extensions.DependencyInjection;
+using Amazon.S3;
 
 namespace FaceDetection.ViewModels
 {
@@ -23,6 +24,7 @@ namespace FaceDetection.ViewModels
         private readonly IVideoCaptureService _videoCaptureService;
         private readonly IFaceDetectionService _faceDetectionService;
         private readonly IServiceScopeFactory _scopeFactory;
+        private readonly IS3Service _s3Service;
 
         private ImageSource _currentFrame;
         private readonly Dispatcher _dispatcher;
@@ -46,7 +48,7 @@ namespace FaceDetection.ViewModels
         private bool _hasLoggedPersonDetected = false;
         private int _previousFaceCount = 0;
         private DateTime _lastPersonLogTime = DateTime.MinValue;
-        private readonly TimeSpan _personLogCooldown = TimeSpan.FromSeconds(3); // Período de enfriamiento de 10 segundos
+        private readonly TimeSpan _personLogCooldown = TimeSpan.FromSeconds(3); // Período de enfriamiento de 3 segundos
 
         public ImageSource CurrentFrame
         {
@@ -76,7 +78,8 @@ namespace FaceDetection.ViewModels
         public MainViewModel(
             IVideoCaptureService videoCaptureService,
             IFaceDetectionService faceDetectionService,
-            IServiceScopeFactory scopeFactory)
+            IServiceScopeFactory scopeFactory,
+            IS3Service s3Service)
         {
             _videoCaptureService = videoCaptureService;
             _faceDetectionService = faceDetectionService;
@@ -84,11 +87,12 @@ namespace FaceDetection.ViewModels
             _dispatcher = Dispatcher.CurrentDispatcher;
 
             _intervalTimer = new DispatcherTimer();
-            _intervalTimer.Interval = TimeSpan.FromSeconds(60);
+            _intervalTimer.Interval = TimeSpan.FromSeconds(20);
             _intervalTimer.Tick += OnIntervalTimerTick;
 
             _videoCaptureService.FrameCaptured += OnFrameCaptured;
             _videoCaptureService.Start();
+            _s3Service = s3Service;
         }
 
         private async void OnFrameCaptured(object sender, Mat frame)
@@ -237,8 +241,18 @@ namespace FaceDetection.ViewModels
             Console.WriteLine($"VideoWriter Configuración: Width={width}, Height={height}, FPS={fps}");
 
             // Inicializar VideoWriter con el tamaño y FPS correctos
+            // Utilizar MJPG para .avi
             int fourcc = VideoWriter.Fourcc('M', 'J', 'P', 'G');
-            _videoWriter = new VideoWriter(_currentVideo.FilePath, fourcc, fps, new Size(width, height), true);
+            string tempFilePath = Path.Combine("Videos", $"Temp_{DateTime.UtcNow:yyyyMMdd_HHmmss}.avi");
+            _videoWriter = new VideoWriter(tempFilePath, fourcc, fps, new Size(width, height), true);
+
+            // Asignar el FilePath temporal al Video actual
+            _currentVideo = new Video
+            {
+                StartTime = _intervalStartTime,
+                FilePath = tempFilePath,
+                // Otros campos se actualizarán al detener la grabación
+            };
         }
 
         private async Task StopRecordingIntervalAsync()
@@ -254,6 +268,7 @@ namespace FaceDetection.ViewModels
 
             if (_currentVideo != null)
             {
+                // Actualizar metadatos del video
                 _currentVideo.EndTime = DateTime.UtcNow;
                 _currentVideo.DurationInSeconds = (int)(_currentVideo.EndTime - _currentVideo.StartTime).TotalSeconds;
                 _currentVideo.MaxPersons = _maxPersonsInInterval;
@@ -269,12 +284,97 @@ namespace FaceDetection.ViewModels
                     // Crear log de fin de grabación
                     await CreateLogAsync("Fin de grabación");
                 }
+
+                // Convertir AVI a MP4 usando FFmpeg embebido
+                string aviFilePath = _currentVideo.FilePath;
+                string mp4FilePath = Path.Combine("Videos", $"Interval_{DateTime.UtcNow:yyyyMMdd_HHmmss}.mp4");
+
+                try
+                {
+                    // Ruta al ejecutable de FFmpeg embebido
+                    string ffmpegPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Models", "FFmpeg", "ffmpeg.exe");
+
+                    // Validar si FFmpeg existe en la ruta configurada
+                    if (!File.Exists(ffmpegPath))
+                    {
+                        throw new FileNotFoundException("No se encontró el ejecutable de FFmpeg en la ruta especificada.", ffmpegPath);
+                    }
+
+                    var ffmpegProcess = new System.Diagnostics.Process
+                    {
+                        StartInfo = new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = ffmpegPath,
+                            Arguments = $"-i \"{aviFilePath}\" -vcodec libx264 -acodec aac \"{mp4FilePath}\" -y",
+                            RedirectStandardOutput = true,
+                            RedirectStandardError = true,
+                            UseShellExecute = false,
+                            CreateNoWindow = true,
+                        }
+                    };
+
+                    ffmpegProcess.Start();
+                    string output = await ffmpegProcess.StandardError.ReadToEndAsync();
+                    ffmpegProcess.WaitForExit();
+
+                    if (ffmpegProcess.ExitCode != 0)
+                    {
+                        throw new Exception($"FFmpeg error: {output}");
+                    }
+
+                    // Subir el archivo MP4 a S3
+                    if (File.Exists(mp4FilePath))
+                    {
+                        string keyName = Path.GetFileName(mp4FilePath);
+                        string s3Url = await _s3Service.UploadFileAsync(mp4FilePath, keyName);
+
+                        // Guardar la URL de S3 en el objeto Video o en la base de datos
+                        _currentVideo.S3Url = s3Url;
+
+                        using (var scope = _scopeFactory.CreateScope())
+                        {
+                            var videoService = scope.ServiceProvider.GetRequiredService<IVideoService>();
+                            await videoService.UpdateVideoAsync(_currentVideo);
+                        }
+
+                        Console.WriteLine($"Video subido a S3: {s3Url}");
+
+                        // Opcional: Eliminar los archivos locales después de la subida
+                        try
+                        {
+                            File.Delete(aviFilePath);
+                            File.Delete(mp4FilePath);
+                            Console.WriteLine("Archivos locales eliminados después de subir a S3.");
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"Error al eliminar los archivos locales: {ex.Message}");
+                            await CreateLogAsync($"Error al eliminar los archivos locales: {ex.Message}");
+                        }
+                    }
+                    else
+                    {
+                        throw new FileNotFoundException("El archivo de video MP4 no existe.", mp4FilePath);
+                    }
+                }
+                catch (FileNotFoundException ex)
+                {
+                    Console.WriteLine($"Error: {ex.Message}");
+                    await CreateLogAsync($"Error: {ex.Message}");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error al procesar el video: {ex.Message}");
+                    await CreateLogAsync($"Error al procesar el video: {ex.Message}");
+                }
+
             }
 
-            // Reset
+            // Reiniciar variables
             _currentVideo = null;
             _hasLoggedPersonDetected = false; // Reset para el próximo intervalo
         }
+
 
         private async void OnIntervalTimerTick(object sender, EventArgs e)
         {
@@ -298,20 +398,8 @@ namespace FaceDetection.ViewModels
             _maxPersonsInInterval = 0;
             _totalFacesDetected = 0;
 
-            // Generar el FilePath
-            string videoFileName = $"Interval_{DateTime.UtcNow:yyyyMMdd_HHmmss}.avi";
-            string videoFilePath = Path.Combine("Videos", videoFileName);
-
-            // Asegúrate de que el directorio existe
-            Directory.CreateDirectory("Videos");
-
-            // Crear un nuevo Video con FilePath asignado
-            _currentVideo = new Video
-            {
-                StartTime = _intervalStartTime,
-                FilePath = videoFilePath,
-                // Otros campos se actualizarán al detener la grabación
-            };
+            // Iniciar la grabación del video del intervalo
+            StartRecordingInterval();
 
             // Guardar el Video en la base de datos y obtener VideoId
             using (var scope = _scopeFactory.CreateScope())
@@ -335,9 +423,6 @@ namespace FaceDetection.ViewModels
 
             // Iniciar el timer de 60 segundos
             _intervalTimer.Start();
-
-            // Iniciar la grabación del video del intervalo
-            StartRecordingInterval();
         }
 
         private ImageSource ConvertMatToImageSource(Mat mat)

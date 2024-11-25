@@ -17,5 +17,7 @@ namespace Models.Domain
         public int DurationInSeconds { get; set; } // Duración en segundos del video
 
         public ICollection<Log> Logs { get; set; } // Relación con Logs
+
+        public string? S3Url { get; set; }
     }
 }

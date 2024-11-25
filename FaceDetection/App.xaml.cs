@@ -31,6 +31,11 @@ namespace FaceDetection
 
         private void ConfigureServices(ServiceCollection services)
         {
+            var awsAccessKey = ConfigurationManager.AppSettings["AWS:AccessKey"];
+            var awsSecretKey = ConfigurationManager.AppSettings["AWS:SecretKey"];
+            var awsRegion = ConfigurationManager.AppSettings["AWS:Region"];
+            var awsBucketName = ConfigurationManager.AppSettings["AWS:S3BucketName"];
+
             // Configure DbContext as Transient
             services.AddTransient<ApplicationDbContext>(provider =>
             {
@@ -50,6 +55,10 @@ namespace FaceDetection
 
             // Register services for video capture and detection
             services.AddSingleton<IVideoCaptureService, VideoCaptureService>();
+            services.AddTransient<IS3Service>(provider =>
+            {
+                return new S3Service(awsAccessKey, awsSecretKey, awsRegion, awsBucketName);
+            });
             services.AddSingleton<IFaceModelLoader, FaceModelLoader>();
             services.AddSingleton<IFaceDetectionService>(provider =>
             {

@@ -23,6 +23,12 @@ namespace DAL.Context
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+
+            modelBuilder.Entity<Log>()
+                .HasOne(log => log.Video)
+                .WithMany(video => video.Logs)
+                .HasForeignKey(log => log.VideoId)
+                .OnDelete(DeleteBehavior.Cascade);
         }
     }
 }
